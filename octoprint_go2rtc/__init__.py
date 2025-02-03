@@ -30,6 +30,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
     def get_settings_defaults(self):
         return {
+            "api": {"origin": "*"},
+            "ffmpeg": {"bin": ""},
             "server_url": "http://localhost:1984",
             "streams": "",
             "stream_profiles": {'Default': {'name': 'Default',
@@ -118,7 +120,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             flipH = profile.get("flipH", None) or False
             flipV = profile.get("flipV", None) or False
             rotate90 = profile.get("rotate90", None) or False
-            snapshot = profile.get("snapshot", None)
+            snapshot = profile.get("snapshot", None) or ""
             stream = profile.get("URL", None) or ""
             streamRatio = profile.get("streamRatio", None) or "4:3"
             canSnapshot = snapshot != "" and snapshot is not None

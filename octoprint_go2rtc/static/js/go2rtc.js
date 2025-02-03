@@ -23,6 +23,8 @@ $(function() {
                 /** @type {VideoStream} */
                 const video = document.createElement('video-stream');
                 video.src = self.get_stream_src(stream_key);
+                video.background = false;
+                video.visibilityThreshold = 1;
                 document.getElementById('go2rtc_' + stream_key).appendChild(video);
             });
         };
