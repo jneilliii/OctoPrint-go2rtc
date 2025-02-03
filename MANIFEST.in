@@ -1,0 +1,4 @@
+include README.md
+recursive-include octoprint_go2rtc/templates *
+recursive-include octoprint_go2rtc/translations *
+recursive-include octoprint_go2rtc/static *
