@@ -1,23 +1,26 @@
 # coding=utf-8
 from __future__ import absolute_import
 
-import json
-import os.path
-import octoprint.plugin
-from octoprint.util import yaml
-import requests
 import threading
-from octoprint.schema.webcam import RatioEnum, Webcam, WebcamCompatibility
-from octoprint.webcams import WebcamNotAbleToTakeSnapshotException, get_webcams
+import flask
+import octoprint.plugin
+import requests
+from octoprint.schema.webcam import Webcam, WebcamCompatibility
+from octoprint.util import yaml
+from octoprint.webcams import WebcamNotAbleToTakeSnapshotException
+from octoprint.access.permissions import Permissions, ADMIN_GROUP
+from flask_babel import gettext
 
 
 class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                    octoprint.plugin.AssetPlugin,
                    octoprint.plugin.TemplatePlugin,
-                   octoprint.plugin.WebcamProviderPlugin
+                   octoprint.plugin.WebcamProviderPlugin,
+                   octoprint.plugin.SimpleApiPlugin
                    ):
 
     def __init__(self, *args, **kwargs):
+        super().__init__()
         self._plugin_settings = None
         self.streamTimeout = 15
         self.snapshotTimeout = 15
@@ -30,58 +33,46 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
     def get_settings_defaults(self):
         return {
-            "api": {"origin": "*"},
-            "ffmpeg": {"bin": ""},
-            "server_url": "http://localhost:1984",
-            "streams": "",
+            "api_error": False,
+            "is_valid_url": False,
+            "server_url": "",
             "stream_profiles": {'Default': {'name': 'Default',
                                             'URL': octoprint.settings.settings().get(["webcam", "stream"]),
                                             'snapshot': octoprint.settings.settings().get(["webcam", "snapshot"]),
-                                            'streamRatio': octoprint.settings.settings().get(["webcam", "streamRatio"]),
-                                            'flipH': octoprint.settings.settings().get(["webcam", "flipH"]),
-                                            'flipV': octoprint.settings.settings().get(["webcam", "flipV"]),
+                                            'stream_ratio': octoprint.settings.settings().get(["webcam", "streamRatio"]),
+                                            'flip_h': octoprint.settings.settings().get(["webcam", "flipH"]),
+                                            'flip_v': octoprint.settings.settings().get(["webcam", "flipV"]),
                                             'rotate90': octoprint.settings.settings().get(["webcam", "rotate90"]),
-                                            'isButtonEnabled': 'true'
+                                            'is_button_enabled': 'true'
                                             }}
-        };
+        }
 
     def on_settings_load(self):
         self._plugin_settings = self._settings.get([], merged=True)
         if not self._settings.get(["server_url"]) == "":
             config_url = self._settings.get(["server_url"]) + "/api/config"
-            web_response = requests.get(config_url)
+            web_response = requests.get(config_url, timeout=20)
 
             if web_response.status_code == 200:
-                self._plugin_settings = octoprint.util.dict_merge(self._plugin_settings,
-                                                                  yaml.load_from_file(web_response.content))
+                self._yaml_settings = yaml.load_from_file(web_response.content)
+                if not self._yaml_settings.get("api", {}).get("origin"):
+                    self._plugin_settings["api_error"] = True
+                self._plugin_settings = octoprint.util.dict_merge(self._plugin_settings, self._yaml_settings)
+            else:
+                self._plugin_settings["is_valid_url"] = False
 
-        self._logger.info(self._plugin_settings)
+        self._logger.info(f"on_settings_load: {self._plugin_settings}")
         return self._plugin_settings
 
     def on_settings_save(self, data):
-        self._logger.info(data)
-        # config_file = os.path.join(self._settings.get_plugin_data_folder(), "go2rtc.yaml")
+        self._logger.info(f"on_settings_save data: {data}")
+
+        if data.get("server_url", "") != "":
+            # strip trailing slash from server url
+            if data.get("server_url", "").endswith("/"):
+                data["server_url"] = data["server_url"][:-1]
+
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
-        settings_to_save = self._settings.get([], merged=True)
-        # overwrite saved streams if they don't match
-        if data.get("streams", False) != self._plugin_settings.get("streams", False):
-            settings_to_save["streams"] = data["streams"]
-        else:
-            settings_to_save["streams"] = self._plugin_settings.get("streams", {})
-
-        config_url = self._settings.get(["server_url"]) + "/api/config"
-        restart_url = self._settings.get(["server_url"]) + "/api/restart"
-        config_response = requests.post(config_url, data=yaml.dump(settings_to_save))
-
-        if config_response.status_code == 200:
-            self._logger.info(f"Settings saved, attempting restart")
-            restart_response = requests.post(restart_url)
-            if restart_response.status_code == 200:
-                self._logger.info(f"Server restarted")
-            else:
-                self._logger.error(f"Server restart response {restart_response.status_code}")
-        else:
-            self._logger.error(f"Server config response {config_response.status_code}")
 
     ##~~ AssetPlugin mixin
 
@@ -112,32 +103,40 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
     # ~~ WebcamProviderPlugin API
 
     def get_webcam_configurations(self):
-        streams = self._settings.get(['streams'])
+        streams = {}
         profiles = self._settings.get(['stream_profiles'])
+        go2rtc_server_url = self._settings.get(['server_url'])
+        if go2rtc_server_url != "":
+            config_url = f"{go2rtc_server_url}/api/config"
+            web_response = requests.get(config_url, timeout=20)
+
+            if web_response.status_code == 200:
+                yaml_settings = yaml.load_from_file(web_response.content)
+                streams = yaml_settings.get("streams", {})
 
         def profile_to_webcam(stream_key):
             profile = profiles.get(stream_key, None) or profiles.get("Default")
-            flipH = profile.get("flipH", None) or False
-            flipV = profile.get("flipV", None) or False
+            flip_h = profile.get("flip_h", None) or False
+            flip_v = profile.get("flip_v", None) or False
             rotate90 = profile.get("rotate90", None) or False
-            snapshot = profile.get("snapshot", None) or ""
-            stream = profile.get("URL", None) or ""
-            streamRatio = profile.get("streamRatio", None) or "4:3"
-            canSnapshot = snapshot != "" and snapshot is not None
+            snapshot = profile.get("snapshot", None) or f"{go2rtc_server_url}/api/frame.jpeg?src={stream_key}"
+            stream = profile.get("URL", None) or f"{go2rtc_server_url}/api/ws?src={stream_key}"
+            stream_ratio = profile.get("stream_ratio", None) or "4:3"
+            can_snapshot = snapshot != "" and snapshot is not None
             name = stream_key
 
             webcam = Webcam(
                 name=f"go2rtc/{name}",
                 displayName=name,
-                flipH=flipH,
-                flipV=flipV,
+                flipH=flip_h,
+                flipV=flip_v,
                 rotate90=rotate90,
                 snapshotDisplay=snapshot,
-                canSnapshot=canSnapshot,
+                canSnapshot=can_snapshot,
                 compat=WebcamCompatibility(
                     stream=stream,
                     streamTimeout=self.streamTimeout,
-                    streamRatio=streamRatio,
+                    streamRatio=stream_ratio,
                     cacheBuster=self.cacheBuster,
                     streamWebrtcIceServers=self.webRtcServers,
                     snapshot=snapshot,
@@ -147,7 +146,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                 extras=dict(
                     stream=stream,
                     streamTimeout=self.streamTimeout,
-                    streamRatio=streamRatio,
+                    streamRatio=stream_ratio,
                     cacheBuster=self.cacheBuster,
                 ),
             )
@@ -156,15 +155,25 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
         return [profile_to_webcam(stream_key) for stream_key in streams]
 
+    def lookup_webcam(self, webcam_name):
+        webcam_configs = self.get_webcam_configurations()
+        return [webcam_config for webcam_config in webcam_configs if webcam_config.name == webcam_name]
+
     def take_webcam_snapshot(self, provided_webcam):
-        webcam = provided_webcam.config
+        webcam = None
+        if isinstance(provided_webcam, str):
+            webcam_lookup = self.lookup_webcam(provided_webcam)
+            if len(webcam_lookup) > 0:
+                webcam = webcam_lookup[0]
+        else:
+            webcam = provided_webcam.config
 
         if webcam is None:
             raise WebcamNotAbleToTakeSnapshotException("provided_webcam is None")
 
         # using compat.snapshot because snapshotDisplay is supposedly only for user
         snapshot_url = webcam.compat.snapshot
-        can_snapshot = snapshot_url is not None and snapshot_url != "http://" and snapshot_url != ""
+        can_snapshot = snapshot_url is not None and snapshot_url != "http://" and snapshot_url != "https://" and snapshot_url != ""
 
         if not can_snapshot:
             raise WebcamNotAbleToTakeSnapshotException(webcam.name)
@@ -179,6 +188,87 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             )
             r.raise_for_status()
             return r.iter_content(chunk_size=1024)
+
+    # SimpleApiPlugin mixin
+
+    def get_api_commands(self):
+        return {"add_stream": ["name", "src", "server_url"],
+                "remove_stream": ["name", "server_url"],
+                "enable_cors": ["server_url"],
+                }
+
+    def on_api_get(self, request):
+        self._logger.debug(request.args)
+        if request.args.get("server_url") != "":
+            server_url = request.args.get("server_url", "")
+            if server_url.endswith("/"):
+                server_url = server_url[:-1]
+            # pull a list of available ffmpeg devices detected by go2rtc
+            if request.args.get("get_cams"):
+                available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=20)
+                if available_cameras.status_code == 200:
+                    response = available_cameras.json()
+                    return flask.jsonify(response)
+                else:
+                    self._logger.error("Failed to get cameras")
+                    return flask.jsonify({"sources": []})
+            if request.args.get("test_url"):
+                config_url = f"{server_url}/api/config"
+                web_response = requests.get(config_url, timeout=20)
+                response = {"success": False}
+
+                if web_response.status_code == 200:
+                    yaml_settings = yaml.load_from_file(web_response.content)
+                    if yaml_settings.get("api", {}).get("origin") == "*":
+                        response = {"success": True, "api": True, "streams": yaml_settings.get("streams", {})}
+                    else:
+                        response = {"success": True, "api": False}
+
+                return flask.jsonify(response)
+
+    def on_api_command(self, command, data):
+        if not Permissions.PLUGIN_GO2RTC_MANAGE.can():
+            return flask.make_response("Insufficient rights", 403)
+
+        if data.get("server_url", "") != "":
+            server_url = data.get("server_url")
+            if server_url.endswith("/"):
+                server_url = server_url[:-1]
+            webcam_name = data.get("name")
+            response = flask.make_response("Something went wrong", 500)
+
+            if command == "add_stream":
+                webcam_src = data["src"]
+                stream_add = requests.put(f"{server_url}/api/streams", params={'src': webcam_src, 'name': webcam_name}, timeout=20)
+                if stream_add.status_code == 200:
+                    response = flask.jsonify({'success': True, 'src': webcam_src, 'name': webcam_name})
+            elif command == "remove_stream":
+                stream_delete = requests.delete(f"{server_url}/api/streams", params={'src': webcam_name}, timeout=20)
+                if stream_delete.status_code == 200:
+                    response = flask.jsonify({'success': True, 'name': webcam_name})
+            elif command == "enable_cors":
+                config_patch = requests.patch(f"{server_url}/api/config", data=yaml.dump({'api': {'origin': '*'}}), timeout=20)
+                if config_patch.status_code == 200:
+                    restart = requests.post(f"{server_url}/api/restart", timeout=20)
+                    if restart.status_code == 200:
+                        response = flask.jsonify({'success': True})
+        else:
+            response = flask.make_response("Invalid server url", 502)
+
+        return response
+
+    def is_template_autoescaped(self):
+        return True
+
+    def get_additional_permissions(self, *args, **kwargs):
+        return [
+            dict(key="MANAGE",
+                 name="Manage go2rtc",
+                 description=gettext("Allows management of go2rtc."),
+                 roles=["admin"],
+                 dangerous=False,
+                 default_groups=[ADMIN_GROUP])
+        ]
 
     ##~~ Softwareupdate hook
 
@@ -210,5 +300,6 @@ def __plugin_load__():
 
     global __plugin_hooks__
     __plugin_hooks__ = {
-        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
+        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
+		"octoprint.access.permissions": __plugin_implementation__.get_additional_permissions
     }

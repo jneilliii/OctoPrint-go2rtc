@@ -10,3 +10,7 @@
 
 setuptools
 OctoPrint
+
+requests
+
+flask

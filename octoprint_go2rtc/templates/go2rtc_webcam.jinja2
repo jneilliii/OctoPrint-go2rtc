@@ -9,3 +9,4 @@
 {#    document.getElementById(stream_key).appendChild(video);#}
 {#</script>#}
 <div class="row-fluid"></div>
+<div class="well alert-danger" data-bind="visible: settingsViewModel.settings.plugins.go2rtc.api_error()" style="display: none;">There is an issue with the go2rtc configuration. Please make sure that <a href="https://github.com/AlexxIT/go2rtc#module-api" target="_blank">api.origin</a> is set.</div>
