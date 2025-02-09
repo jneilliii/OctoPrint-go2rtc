@@ -5,7 +5,7 @@ import threading
 import flask
 import octoprint.plugin
 import requests
-from octoprint.schema.webcam import Webcam, WebcamCompatibility
+from octoprint.schema.webcam import Webcam, WebcamCompatibility, RatioEnum
 from octoprint.util import yaml
 from octoprint.webcams import WebcamNotAbleToTakeSnapshotException
 from octoprint.access.permissions import Permissions, ADMIN_GROUP
@@ -28,6 +28,14 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         self.snapshotSslValidation = True
         self.webRtcServers = []
         self._capture_mutex = threading.Lock()
+        self._default_profile = {'name': 'Default',
+                                 'URL': None,
+                                 'snapshot': None,
+                                 'stream_ratio': None,
+                                 'flip_h': None,
+                                 'flip_v': None,
+                                 'rotate90': None,
+                                 }
 
     ##~~ SettingsPlugin mixin
 
@@ -36,15 +44,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             "api_error": False,
             "is_valid_url": False,
             "server_url": "",
-            "stream_profiles": {'Default': {'name': 'Default',
-                                            'URL': octoprint.settings.settings().get(["webcam", "stream"]),
-                                            'snapshot': octoprint.settings.settings().get(["webcam", "snapshot"]),
-                                            'stream_ratio': octoprint.settings.settings().get(["webcam", "streamRatio"]),
-                                            'flip_h': octoprint.settings.settings().get(["webcam", "flipH"]),
-                                            'flip_v': octoprint.settings.settings().get(["webcam", "flipV"]),
-                                            'rotate90': octoprint.settings.settings().get(["webcam", "rotate90"]),
-                                            'is_button_enabled': 'true'
-                                            }}
+            "stream_profiles": {}
         }
 
     def on_settings_load(self):
@@ -115,7 +115,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                 streams = yaml_settings.get("streams", {})
 
         def profile_to_webcam(stream_key):
-            profile = profiles.get(stream_key, None) or profiles.get("Default")
+            profile = profiles.get(stream_key, None) or self._default_profile
             flip_h = profile.get("flip_h", None) or False
             flip_v = profile.get("flip_v", None) or False
             rotate90 = profile.get("rotate90", None) or False
@@ -136,7 +136,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                 compat=WebcamCompatibility(
                     stream=stream,
                     streamTimeout=self.streamTimeout,
-                    streamRatio=stream_ratio,
+                    streamRatio=RatioEnum(stream_ratio),
                     cacheBuster=self.cacheBuster,
                     streamWebrtcIceServers=self.webRtcServers,
                     snapshot=snapshot,
