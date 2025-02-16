@@ -9,7 +9,7 @@
                     <input type="text" class="input-block-level" data-bind="textInput: settingsViewModel.settings.plugins.go2rtc.server_url" placeholder="http://<ip>:1984">
                 </div>
                 <div class="span2">
-                    <button class="btn" data-bind="click: validate_url">Verify</button>
+                    <button class="btn" data-bind="click: validate_url, disable: verifying_url"><i class="fa fa-spinner icon-spin" data-bind="visible: verifying_url()" style="display: none"></i><span data-bind="visible: !verifying_url()">Verify</span></button>
                 </div>
             </div>
         </div>

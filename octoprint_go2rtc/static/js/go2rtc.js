@@ -14,12 +14,14 @@ $(function () {
             self.ffmpeg_sources = ko.observableArray([]);
             self.streams_updated = ko.observable(false);
             self.is_valid_url = ko.observable(false);
+            self.verifying_url = ko.observable(false);
             self.server_url = "";
 
             self.validate_url = function () {
                 if (self.settingsViewModel.settings.plugins.go2rtc.server_url() === "") {
                     self.is_valid_url(false);
                 } else {
+                    self.verifying_url(true);
                     OctoPrint.simpleApiGet("go2rtc", {
                         'data': {
                             'test_url': true,
@@ -41,7 +43,14 @@ $(function () {
                                 }
                                 self.server_url = self.settingsViewModel.settings.plugins.go2rtc.server_url();
                                 self.streams_updated(true);
+                            } else {
+                                let error_message = "Unable to validate server url."
+                                if (data.error) {
+                                    error_message = 'There was a "' + data.error + '", unable to validate server url.';
+                                }
+                                self.pop_error(error_message);
                             }
+                            self.verifying_url(false);
                         });
                 }
             };
@@ -52,8 +61,8 @@ $(function () {
             };
 
             self.onAfterBinding = function () {
-                if(self.settingsViewModel.settings.plugins.go2rtc.server_url() !== "") {
-                    if(!self.is_valid_url()) {
+                if (self.settingsViewModel.settings.plugins.go2rtc.server_url() !== "") {
+                    if (!self.is_valid_url()) {
                         self.validate_url();
                     }
                     if (!self.settingsViewModel.settings.plugins.go2rtc.api_error() && self.is_valid_url()) {
@@ -83,19 +92,20 @@ $(function () {
                                 self.ffmpeg_sources(data.sources);
                             } else {
                                 self.ffmpeg_sources.removeAll();
+                                self.pop_error("Unable to get webcams");
                             }
                         });
                 }
             };
 
             self.onSettingsShown = function () {
-                if(self.settingsViewModel.settings.plugins.go2rtc.server_url() !== "" && self.is_valid_url()) {
+                if (self.settingsViewModel.settings.plugins.go2rtc.server_url() !== "" && self.is_valid_url()) {
                     self.get_webcams();
                 }
             };
 
             self.onSettingsBeforeSave = function () {
-                if(self.settingsViewModel.settings.plugins.go2rtc.server_url() === "") {
+                if (self.settingsViewModel.settings.plugins.go2rtc.server_url() === "") {
                     self.is_valid_url(false);
                 }
                 self.settingsViewModel.settings.plugins.go2rtc.is_valid_url(self.is_valid_url());
@@ -144,11 +154,13 @@ $(function () {
             self.enable_cors = function () {
                 if (self.settingsViewModel.settings.plugins.go2rtc.server_url() !== "") {
                     OctoPrint.simpleApiCommand("go2rtc", "enable_cors", {
-                       'server_url': self.settingsViewModel.settings.plugins.go2rtc.server_url()
+                        'server_url': self.settingsViewModel.settings.plugins.go2rtc.server_url()
                     })
                         .done(function (data) {
                             if (data.success) {
                                 self.validate_url();
+                            } else {
+                                self.pop_error("Unable to enable CORS.");
                             }
                         });
                 }
@@ -166,6 +178,8 @@ $(function () {
                     if (response.success) {
                         self.streams.set(webcam_name, src);
                         self.streams_updated(true);
+                    } else {
+                        self.pop_error("Unable to add stream.");
                     }
                 }).fail(function (response) {
                     console.log(response);
@@ -180,6 +194,8 @@ $(function () {
                     if (response.success) {
                         self.streams.remove(data);
                         self.streams_updated(true);
+                    } else {
+                        self.pop_error("Unable to remove stream.");
                     }
                 }).fail(function (response) {
                     console.log(response);
@@ -189,7 +205,31 @@ $(function () {
             self.get_stream_src = function (data) {
                 return new URL('api/ws?src=' + encodeURIComponent(data), self.settingsViewModel.settings.plugins.go2rtc.server_url()).toString();
             };
+
+            self.pop_error = function (error_message) {
+                new PNotify({
+                    title: 'go2rtc error',
+                    text: error_message,
+                    type: 'error',
+                    hide: false,
+                    buttons: {
+                        closer: false,
+                        sticker: false
+                    },
+                    confirm: {
+                        confirm: true,
+                        buttons: [{addClass: 'hidden'}, {
+                            text: 'Close',
+                            addClass: 'btn-danger',
+                            click: function (notice) {
+                                notice.remove();
+                            }
+                        }]
+                    }
+                });
+            };
         }
+
 
         function getWebcamInstances() {
             let elements = ["#settings_plugin_go2rtc"];

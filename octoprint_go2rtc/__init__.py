@@ -5,6 +5,7 @@ import threading
 import flask
 import octoprint.plugin
 import requests
+from requests.exceptions import Timeout, ConnectionError
 from octoprint.schema.webcam import Webcam, WebcamCompatibility, RatioEnum
 from octoprint.util import yaml
 from octoprint.webcams import WebcamNotAbleToTakeSnapshotException
@@ -28,6 +29,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         self.snapshotSslValidation = True
         self.webRtcServers = []
         self._capture_mutex = threading.Lock()
+        self._yaml_settings = None
         self._default_profile = {'name': 'Default',
                                  'URL': None,
                                  'snapshot': None,
@@ -51,14 +53,20 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         self._plugin_settings = self._settings.get([], merged=True)
         if not self._settings.get(["server_url"]) == "":
             config_url = self._settings.get(["server_url"]) + "/api/config"
-            web_response = requests.get(config_url, timeout=20)
-
-            if web_response.status_code == 200:
-                self._yaml_settings = yaml.load_from_file(web_response.content)
-                if not self._yaml_settings.get("api", {}).get("origin"):
-                    self._plugin_settings["api_error"] = True
-                self._plugin_settings = octoprint.util.dict_merge(self._plugin_settings, self._yaml_settings)
-            else:
+            try:
+                web_response = requests.get(config_url, timeout=(3, 10))
+                if web_response.status_code == 200:
+                    self._yaml_settings = yaml.load_from_file(web_response.content)
+                    if not self._yaml_settings.get("api", {}).get("origin"):
+                        self._plugin_settings["api_error"] = True
+                    self._plugin_settings = octoprint.util.dict_merge(self._plugin_settings, self._yaml_settings)
+                else:
+                    self._plugin_settings["is_valid_url"] = False
+            except ConnectionError:
+                self._logger.error(f"connection error with {config_url}")
+                self._plugin_settings["is_valid_url"] = False
+            except Timeout:
+                self._logger.error(f"timeout error with {config_url}")
                 self._plugin_settings["is_valid_url"] = False
 
         self._logger.info(f"on_settings_load: {self._plugin_settings}")
@@ -108,11 +116,18 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         go2rtc_server_url = self._settings.get(['server_url'])
         if go2rtc_server_url != "":
             config_url = f"{go2rtc_server_url}/api/config"
-            web_response = requests.get(config_url, timeout=20)
+            try:
+                web_response = requests.get(config_url, timeout=(3, 10))
 
-            if web_response.status_code == 200:
-                yaml_settings = yaml.load_from_file(web_response.content)
-                streams = yaml_settings.get("streams", {})
+                if web_response.status_code == 200:
+                    yaml_settings = yaml.load_from_file(web_response.content)
+                    streams = yaml_settings.get("streams", {})
+            except ConnectionError:
+                self._logger.error(f"connection error with {config_url}")
+                streams = {}
+            except Timeout:
+                self._logger.error(f"timeout error with {config_url}")
+                streams = {}
 
         def profile_to_webcam(stream_key):
             profile = profiles.get(stream_key, None) or self._default_profile
@@ -199,32 +214,38 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
     def on_api_get(self, request):
         self._logger.debug(request.args)
+        response = {"success": False}
         if request.args.get("server_url") != "":
             server_url = request.args.get("server_url", "")
             if server_url.endswith("/"):
                 server_url = server_url[:-1]
-            # pull a list of available ffmpeg devices detected by go2rtc
-            if request.args.get("get_cams"):
-                available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=20)
-                if available_cameras.status_code == 200:
-                    response = available_cameras.json()
-                    return flask.jsonify(response)
-                else:
-                    self._logger.error("Failed to get cameras")
-                    return flask.jsonify({"sources": []})
-            if request.args.get("test_url"):
-                config_url = f"{server_url}/api/config"
-                web_response = requests.get(config_url, timeout=20)
-                response = {"success": False}
-
-                if web_response.status_code == 200:
-                    yaml_settings = yaml.load_from_file(web_response.content)
-                    if yaml_settings.get("api", {}).get("origin") == "*":
-                        response = {"success": True, "api": True, "streams": yaml_settings.get("streams", {})}
+            try:
+                # pull a list of available ffmpeg devices detected by go2rtc
+                if request.args.get("get_cams"):
+                    available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=(3, 10))
+                    if available_cameras.status_code == 200:
+                        response = available_cameras.json()
                     else:
-                        response = {"success": True, "api": False}
+                        self._logger.error("Failed to get cameras")
+                        response = {"sources": []}
+                if request.args.get("test_url"):
+                    config_url = f"{server_url}/api/config"
+                    web_response = requests.get(config_url, timeout=(3, 10))
 
-                return flask.jsonify(response)
+                    if web_response.status_code == 200:
+                        yaml_settings = yaml.load_from_file(web_response.content)
+                        if yaml_settings.get("api", {}).get("origin") == "*":
+                            response = {"success": True, "api": True, "streams": yaml_settings.get("streams", {})}
+                        else:
+                            response = {"success": True, "api": False}
+            except ConnectionError:
+                self._logger.error(f"connection error with {server_url}")
+                response["error"] = "connection error"
+            except Timeout:
+                self._logger.error(f"timeout error with {server_url}")
+                response["error"] = "timeout error"
+
+        return flask.jsonify(response)
 
     def on_api_command(self, command, data):
         if not Permissions.PLUGIN_GO2RTC_MANAGE.can():
@@ -239,17 +260,19 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
             if command == "add_stream":
                 webcam_src = data["src"]
-                stream_add = requests.put(f"{server_url}/api/streams", params={'src': webcam_src, 'name': webcam_name}, timeout=20)
+                stream_add = requests.put(f"{server_url}/api/streams", params={'src': webcam_src, 'name': webcam_name},
+                                          timeout=(3, 10))
                 if stream_add.status_code == 200:
                     response = flask.jsonify({'success': True, 'src': webcam_src, 'name': webcam_name})
             elif command == "remove_stream":
-                stream_delete = requests.delete(f"{server_url}/api/streams", params={'src': webcam_name}, timeout=20)
+                stream_delete = requests.delete(f"{server_url}/api/streams", params={'src': webcam_name}, timeout=(3, 10))
                 if stream_delete.status_code == 200:
                     response = flask.jsonify({'success': True, 'name': webcam_name})
             elif command == "enable_cors":
-                config_patch = requests.patch(f"{server_url}/api/config", data=yaml.dump({'api': {'origin': '*'}}), timeout=20)
+                config_patch = requests.patch(f"{server_url}/api/config", data=yaml.dump({'api': {'origin': '*'}}),
+                                              timeout=(3, 10))
                 if config_patch.status_code == 200:
-                    restart = requests.post(f"{server_url}/api/restart", timeout=20)
+                    restart = requests.post(f"{server_url}/api/restart", timeout=(3, 10))
                     if restart.status_code == 200:
                         response = flask.jsonify({'success': True})
         else:
@@ -301,5 +324,5 @@ def __plugin_load__():
     global __plugin_hooks__
     __plugin_hooks__ = {
         "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
-		"octoprint.access.permissions": __plugin_implementation__.get_additional_permissions
+        "octoprint.access.permissions": __plugin_implementation__.get_additional_permissions
     }
