@@ -46,7 +46,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             "api_error": False,
             "is_valid_url": False,
             "server_url": "",
-            "stream_profiles": {}
+            "stream_profiles": {},
+            "disabled_streams": []
         }
 
     def on_settings_load(self):
@@ -168,7 +169,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             self._logger.debug(f"Webcam: {webcam}")
             return webcam
 
-        return [profile_to_webcam(stream_key) for stream_key in streams]
+        return [profile_to_webcam(stream_key) for stream_key in streams if stream_key not in self._settings.get(["disabled_streams"])]
 
     def lookup_webcam(self, webcam_name):
         webcam_configs = self.get_webcam_configurations()

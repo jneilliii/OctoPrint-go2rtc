@@ -11,6 +11,7 @@ $(function () {
 
             self.settingsViewModel = parameters[0];
             self.streams = ko.observableDictionary();
+            self.disabled_streams = ko.observableDictionary();
             self.ffmpeg_sources = ko.observableArray([]);
             self.streams_updated = ko.observable(false);
             self.is_valid_url = ko.observable(false);
@@ -68,12 +69,19 @@ $(function () {
                     if (!self.settingsViewModel.settings.plugins.go2rtc.api_error() && self.is_valid_url()) {
                         ko.utils.arrayForEach(self.streams.items(), function (item) {
                             const stream_key = item.key();
-                            /** @type {VideoStream} */
-                            const video = document.createElement('video-stream');
-                            video.src = self.get_stream_src(stream_key);
-                            video.background = false;
-                            video.visibilityThreshold = 1;
-                            document.getElementById('go2rtc_' + stream_key).appendChild(video);
+                            if(self.settingsViewModel.settings.plugins.go2rtc.disabled_streams.indexOf(stream_key) === -1) {
+                                /** @type {VideoStream} */
+                                const video = document.createElement('video-stream');
+                                video.src = self.get_stream_src(stream_key);
+                                video.background = false;
+                                video.visibilityThreshold = 1;
+                                document.getElementById('go2rtc_' + stream_key).appendChild(video);
+                            } else {
+                                self.disabled_streams.set(stream_key, item.value());
+                            }
+                        });
+                        ko.utils.arrayForEach(self.disabled_streams.items(), function (item) {
+                            self.streams.remove(item);
                         });
                     }
                 }
@@ -108,6 +116,7 @@ $(function () {
                 if (self.settingsViewModel.settings.plugins.go2rtc.server_url() === "") {
                     self.is_valid_url(false);
                 }
+                self.settingsViewModel.settings.plugins.go2rtc.disabled_streams = self.disabled_streams.keys();
                 self.settingsViewModel.settings.plugins.go2rtc.is_valid_url(self.is_valid_url());
             };
 
@@ -184,6 +193,18 @@ $(function () {
                 }).fail(function (response) {
                     console.log(response);
                 });
+            };
+
+            self.disable_stream = function (data) {
+                self.streams.remove(data);
+                self.disabled_streams.set(data.key(), data.value());
+                self.streams_updated(true);
+            };
+
+            self.enable_stream = function (data) {
+                self.disabled_streams.remove(data);
+                self.streams.set(data.key(), data.value());
+                self.streams_updated(true);
             };
 
             self.remove_stream = function (data) {

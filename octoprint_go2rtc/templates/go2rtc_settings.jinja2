@@ -22,7 +22,7 @@
         <p>The plugin can set this for you by clicking <a href="#" data-bind="click: enable_cors">here</a>, with the understanding you are allowing to embed and communicate with go2rtc's server from any web site that has access.</p>
     </div>
     <div class="row-fluid" data-bind="visible: is_valid_url() && !settingsViewModel.settings.plugins.go2rtc.api_error()" style="display: none;">
-        <h4>{{ _('Saved Streams') }}</h4>
+        <h4>{{ _('Enabled Streams') }}</h4>
         <div class="well" data-bind='foreach: streams.items'>
             <div class="control-group">
                 <label class="control-label"><span data-bind="text: key"></span></label>
@@ -30,8 +30,23 @@
                     <div class="span10">
                         <input type="text" class="input-block-level" data-bind="value: value" placeholder="{{ _('Stream Value') }}" readonly="readonly">
                     </div>
+                    <div class="span2 btn-group">
+                        <button class="btn btn-primary" data-bind="click: $root.disable_stream" title="{{ _('Disable stream in this instance of OctoPrint.') }}"><i class="fas fa-video-slash" aria-hidden="true"></i></button>
+                        <button class="btn btn-danger" data-bind="click: $root.remove_stream" title="{{ _('Remove stream from go2rtc configuration.') }}"><i class="icon icon-trash" aria-hidden="true"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <h4 data-bind="visible: disabled_streams.items().length > 0" style="display: none">{{ _('Disabled Streams') }}</h4>
+        <div class="well" data-bind="foreach: disabled_streams.items, visible: disabled_streams.items().length > 0" style="display: none">
+            <div class="control-group">
+                <label class="control-label"><span data-bind="text: key"></span></label>
+                <div class="controls">
+                    <div class="span10">
+                        <input type="text" class="input-block-level" data-bind="value: value" placeholder="{{ _('Stream Value') }}" readonly="readonly">
+                    </div>
                     <div class="span2">
-                        <button class="btn btn-danger" data-bind="click: $root.remove_stream"><i class="icon icon-trash" aria-hidden="true"></i></button>
+                        <button class="btn btn-primary" data-bind="click: $root.enable_stream" title="{{ _('Enable stream in this instance of OctoPrint.') }}"><i class="fas fa-video" aria-hidden="true"></i></button>
                     </div>
                 </div>
             </div>
@@ -46,7 +61,7 @@
                            <input type="text" id="new_stream_value" class="input-block-level" placeholder="{{ _('Stream Value') }}">
                         </div>
                         <div class="span2">
-                            <button class="btn btn-primary" data-bind="click: add_stream"><i class="icon icon-plus-sign" aria-hidden="true"></i></button>
+                            <button class="btn btn-primary" data-bind="click: add_stream" title="{{ _('Add stream to go2rtc configuration.') }}"><i class="icon icon-plus-sign" aria-hidden="true"></i></button>
                         </div>
                     </div>
                 </div>
@@ -59,7 +74,7 @@
                            <input type="text" class="input-block-level" placeholder="{{ _('Stream Value') }}" data-bind="value: url">
                         </div>
                         <div class="span2">
-                            <button class="btn btn-primary" data-bind="click: $root.add_stream"><i class="icon icon-plus-sign" aria-hidden="true"></i></button>
+                            <button class="btn btn-primary" data-bind="click: $root.add_stream" title="{{ _('Add stream to go2rtc configuration.') }}"><i class="icon icon-plus-sign" aria-hidden="true"></i></button>
                         </div>
                     </div>
                 </div>
