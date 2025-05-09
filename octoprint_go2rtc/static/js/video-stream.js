@@ -27,7 +27,7 @@ class VideoStream extends VideoRTC {
         video-stream {
             position: relative;
         }
-        .info {
+        .go2rtc.info {
             position: absolute;
             top: 0;
             left: 0;
@@ -45,7 +45,7 @@ class VideoStream extends VideoRTC {
         </div>
         `;
 
-        const info = this.querySelector('.info');
+        const info = this.querySelector('.go2rtc.info');
         this.insertBefore(this.video, info);
     }
 
