@@ -39,7 +39,7 @@ class VideoStream extends VideoRTC {
             pointer-events: none;
         }
         </style>
-        <div class="info">
+        <div class="go2rtc info">
             <div class="status"></div>
             <div class="mode"></div>
         </div>

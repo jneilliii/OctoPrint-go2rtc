@@ -50,6 +50,12 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             "disabled_streams": []
         }
 
+    def _sanitize_stream_keys(self, yaml_settings):
+        if yaml_settings.get("streams"):
+            sanitized_streams = {str(key): value for key, value in yaml_settings.get("streams").items()}
+            yaml_settings["streams"] = sanitized_streams
+        return yaml_settings
+
     def on_settings_load(self):
         self._plugin_settings = self._settings.get([], merged=True)
         if not self._settings.get(["server_url"]) == "":
@@ -58,6 +64,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                 web_response = requests.get(config_url, timeout=(3, 10))
                 if web_response.status_code == 200:
                     self._yaml_settings = yaml.load_from_file(web_response.content)
+                    self._yaml_settings = self._sanitize_stream_keys(self._yaml_settings)
                     if not self._yaml_settings.get("api", {}).get("origin"):
                         self._plugin_settings["api_error"] = True
                     self._plugin_settings = octoprint.util.dict_merge(self._plugin_settings, self._yaml_settings)
@@ -139,7 +146,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             stream = profile.get("URL", None) or f"{go2rtc_server_url}/api/ws?src={stream_key}"
             stream_ratio = profile.get("stream_ratio", None) or "4:3"
             can_snapshot = snapshot != "" and snapshot is not None
-            name = stream_key
+            name = str(stream_key)
 
             webcam = Webcam(
                 name=f"go2rtc/{name}",
@@ -169,7 +176,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             self._logger.debug(f"Webcam: {webcam}")
             return webcam
 
-        return [profile_to_webcam(stream_key) for stream_key in streams if stream_key not in self._settings.get(["disabled_streams"])]
+        return [profile_to_webcam(stream_key) for stream_key in streams if str(stream_key) not in self._settings.get(["disabled_streams"])]
 
     def lookup_webcam(self, webcam_name):
         webcam_configs = self.get_webcam_configurations()
