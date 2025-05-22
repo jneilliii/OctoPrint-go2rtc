@@ -26,7 +26,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         self.streamTimeout = 15
         self.snapshotTimeout = 15
         self.cacheBuster = True
-        self.snapshotSslValidation = True
+        # TODO: convert this to a setting
+        self.snapshotSslValidation = False
         self.webRtcServers = []
         self._capture_mutex = threading.Lock()
         self._yaml_settings = None
@@ -61,7 +62,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         if not self._settings.get(["server_url"]) == "":
             config_url = self._settings.get(["server_url"]) + "/api/config"
             try:
-                web_response = requests.get(config_url, timeout=(3, 10))
+                web_response = requests.get(config_url, timeout=(3, 10), verify=self.snapshotSslValidation)
                 if web_response.status_code == 200:
                     self._yaml_settings = yaml.load_from_file(web_response.content)
                     self._yaml_settings = self._sanitize_stream_keys(self._yaml_settings)
@@ -125,7 +126,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         if go2rtc_server_url != "":
             config_url = f"{go2rtc_server_url}/api/config"
             try:
-                web_response = requests.get(config_url, timeout=(3, 10))
+                web_response = requests.get(config_url, timeout=(3, 10), verify=self.snapshotSslValidation)
 
                 if web_response.status_code == 200:
                     yaml_settings = yaml.load_from_file(web_response.content)
@@ -230,7 +231,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             try:
                 # pull a list of available ffmpeg devices detected by go2rtc
                 if request.args.get("get_cams"):
-                    available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=(3, 10))
+                    available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=(3, 10), verify=self.snapshotSslValidation)
                     if available_cameras.status_code == 200:
                         response = available_cameras.json()
                     else:
@@ -238,7 +239,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                         response = {"sources": []}
                 if request.args.get("test_url"):
                     config_url = f"{server_url}/api/config"
-                    web_response = requests.get(config_url, timeout=(3, 10))
+                    web_response = requests.get(config_url, timeout=(3, 10), verify=self.snapshotSslValidation)
 
                     if web_response.status_code == 200:
                         yaml_settings = yaml.load_from_file(web_response.content)

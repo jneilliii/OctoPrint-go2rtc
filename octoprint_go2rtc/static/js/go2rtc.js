@@ -224,7 +224,7 @@ $(function () {
             };
 
             self.get_stream_src = function (data) {
-                return new URL('api/ws?src=' + encodeURIComponent(data), self.settingsViewModel.settings.plugins.go2rtc.server_url()).toString();
+                return new URL(self.settingsViewModel.settings.plugins.go2rtc.server_url() + '/api/ws?src=' + encodeURIComponent(data)).toString();
             };
 
             self.pop_error = function (error_message) {
