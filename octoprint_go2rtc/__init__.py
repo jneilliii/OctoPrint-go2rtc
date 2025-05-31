@@ -5,6 +5,7 @@ import threading
 import flask
 import octoprint.plugin
 import requests
+from octoprint.settings import valid_boolean_trues
 from requests.exceptions import Timeout, ConnectionError
 from octoprint.schema.webcam import Webcam, WebcamCompatibility, RatioEnum
 from octoprint.util import yaml
@@ -26,7 +27,6 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         self.streamTimeout = 15
         self.snapshotTimeout = 15
         self.cacheBuster = True
-        self.snapshotSslValidation = True
         self.webRtcServers = []
         self._capture_mutex = threading.Lock()
         self._yaml_settings = None
@@ -47,7 +47,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             "is_valid_url": False,
             "server_url": "",
             "stream_profiles": {},
-            "disabled_streams": []
+            "disabled_streams": [],
+            "ignore_ssl_validation": False
         }
 
     def _sanitize_stream_keys(self, yaml_settings):
@@ -58,10 +59,13 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
     def on_settings_load(self):
         self._plugin_settings = self._settings.get([], merged=True)
+        validate_ssl = self._plugin_settings.get("ignore_ssl_validation") not in valid_boolean_trues
+        if not validate_ssl:
+            requests.packages.urllib3.disable_warnings()
         if not self._settings.get(["server_url"]) == "":
             config_url = self._settings.get(["server_url"]) + "/api/config"
             try:
-                web_response = requests.get(config_url, timeout=(3, 10))
+                web_response = requests.get(config_url, timeout=(3, 10), verify=validate_ssl)
                 if web_response.status_code == 200:
                     self._yaml_settings = yaml.load_from_file(web_response.content)
                     self._yaml_settings = self._sanitize_stream_keys(self._yaml_settings)
@@ -122,10 +126,11 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         streams = {}
         profiles = self._settings.get(['stream_profiles'])
         go2rtc_server_url = self._settings.get(['server_url'])
+        validate_ssl = self._settings.get(["ignore_ssl_validation"]) not in valid_boolean_trues
         if go2rtc_server_url != "":
             config_url = f"{go2rtc_server_url}/api/config"
             try:
-                web_response = requests.get(config_url, timeout=(3, 10))
+                web_response = requests.get(config_url, timeout=(3, 10), verify=validate_ssl)
 
                 if web_response.status_code == 200:
                     yaml_settings = yaml.load_from_file(web_response.content)
@@ -164,7 +169,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                     streamWebrtcIceServers=self.webRtcServers,
                     snapshot=snapshot,
                     snapshotTimeout=self.snapshotTimeout,
-                    snapshotSslValidation=self.snapshotSslValidation,
+                    snapshotSslValidation=validate_ssl,
                 ),
                 extras=dict(
                     stream=stream,
@@ -207,7 +212,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                 snapshot_url,
                 stream=True,
                 timeout=self.snapshotTimeout,
-                verify=self.snapshotSslValidation,
+                verify=webcam.compat.snapshotSslValidation,
             )
             r.raise_for_status()
             return r.iter_content(chunk_size=1024)
@@ -225,12 +230,13 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         response = {"success": False}
         if request.args.get("server_url") != "":
             server_url = request.args.get("server_url", "")
+            validate_ssl = request.args.get("ignore_ssl_validation", True) not in valid_boolean_trues
             if server_url.endswith("/"):
                 server_url = server_url[:-1]
             try:
                 # pull a list of available ffmpeg devices detected by go2rtc
                 if request.args.get("get_cams"):
-                    available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=(3, 10))
+                    available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=(3, 10), verify=validate_ssl)
                     if available_cameras.status_code == 200:
                         response = available_cameras.json()
                     else:
@@ -238,7 +244,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                         response = {"sources": []}
                 if request.args.get("test_url"):
                     config_url = f"{server_url}/api/config"
-                    web_response = requests.get(config_url, timeout=(3, 10))
+                    web_response = requests.get(config_url, timeout=(3, 10), verify=validate_ssl)
 
                     if web_response.status_code == 200:
                         yaml_settings = yaml.load_from_file(web_response.content)
@@ -261,6 +267,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
         if data.get("server_url", "") != "":
             server_url = data.get("server_url")
+            validate_ssl = data.get("ignore_ssl_validation", True) not in valid_boolean_trues
             if server_url.endswith("/"):
                 server_url = server_url[:-1]
             webcam_name = data.get("name")
@@ -269,18 +276,19 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             if command == "add_stream":
                 webcam_src = data["src"]
                 stream_add = requests.put(f"{server_url}/api/streams", params={'src': webcam_src, 'name': webcam_name},
-                                          timeout=(3, 10))
+                                          timeout=(3, 10), verify=validate_ssl)
                 if stream_add.status_code == 200:
                     response = flask.jsonify({'success': True, 'src': webcam_src, 'name': webcam_name})
             elif command == "remove_stream":
-                stream_delete = requests.delete(f"{server_url}/api/streams", params={'src': webcam_name}, timeout=(3, 10))
+                stream_delete = requests.delete(f"{server_url}/api/streams", params={'src': webcam_name}, timeout=(3, 10),
+                                                verify=validate_ssl)
                 if stream_delete.status_code == 200:
                     response = flask.jsonify({'success': True, 'name': webcam_name})
             elif command == "enable_cors":
                 config_patch = requests.patch(f"{server_url}/api/config", data=yaml.dump({'api': {'origin': '*'}}),
-                                              timeout=(3, 10))
+                                              timeout=(3, 10), verify=validate_ssl)
                 if config_patch.status_code == 200:
-                    restart = requests.post(f"{server_url}/api/restart", timeout=(3, 10))
+                    restart = requests.post(f"{server_url}/api/restart", timeout=(3, 10), verify=validate_ssl)
                     if restart.status_code == 200:
                         response = flask.jsonify({'success': True})
         else:
