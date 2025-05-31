@@ -13,9 +13,14 @@
                 </div>
             </div>
         </div>
+        <div class="control-group">
+            <div class="controls">
+                <label class="checkbox"><input type="checkbox" data-bind="checked: settingsViewModel.settings.plugins.go2rtc.ignore_ssl_validation"> {{ _('Ignore SSL validation, needed for untrusted/self-signed certificates.') }}</label>
+            </div>
+        </div>
     </div>
     <div class="well alert-danger" data-bind="visible: settingsViewModel.settings.plugins.go2rtc.api_error()" style="display: none;">
-        <p>In order to use go2rtc with OctoPrint you must enable <a href="https://github.com/AlexxIT/go2rtc#module-api" target="_blank">api.origin</a> in go2rtc's <a href="#" target="_blank" data-bind="attr: {href: settingsViewModel.settings.plugins.go2rtc.server_url() + '/editor.html'}">config</a> or configure a reverse proxy (preferred if using https to access OctoPrint).</p>
+        <p>To use go2rtc with OctoPrint you must enable <a href="https://github.com/AlexxIT/go2rtc#module-api" target="_blank">api.origin</a> in go2rtc's <a href="#" target="_blank" data-bind="attr: {href: settingsViewModel.settings.plugins.go2rtc.server_url() + '/editor.html'}">config</a> or configure a reverse proxy (preferred if using https to access OctoPrint).</p>
         <pre>api:
   origin: '*'
         </pre>

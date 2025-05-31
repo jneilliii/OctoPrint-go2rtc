@@ -27,6 +27,7 @@ $(function () {
                         'data': {
                             'test_url': true,
                             'server_url': self.settingsViewModel.settings.plugins.go2rtc.server_url(),
+                            'ignore_ssl_validation': self.settingsViewModel.settings.plugins.go2rtc.ignore_ssl_validation(),
                         }
                     })
                         .done(function (data) {
@@ -93,6 +94,7 @@ $(function () {
                         'data': {
                             'get_cams': true,
                             'server_url': self.settingsViewModel.settings.plugins.go2rtc.server_url(),
+                            'ignore_ssl_validation': self.settingsViewModel.settings.plugins.go2rtc.ignore_ssl_validation(),
                         }
                     })
                         .done(function (data) {
@@ -163,7 +165,8 @@ $(function () {
             self.enable_cors = function () {
                 if (self.settingsViewModel.settings.plugins.go2rtc.server_url() !== "") {
                     OctoPrint.simpleApiCommand("go2rtc", "enable_cors", {
-                        'server_url': self.settingsViewModel.settings.plugins.go2rtc.server_url()
+                        'server_url': self.settingsViewModel.settings.plugins.go2rtc.server_url(),
+                        'ignore_ssl_validation': self.settingsViewModel.settings.plugins.go2rtc.ignore_ssl_validation(),
                     })
                         .done(function (data) {
                             if (data.success) {
@@ -182,7 +185,8 @@ $(function () {
                 OctoPrint.simpleApiCommand("go2rtc", "add_stream", {
                     "name": webcam_name,
                     "src": src,
-                    "server_url": self.settingsViewModel.settings.plugins.go2rtc.server_url()
+                    "server_url": self.settingsViewModel.settings.plugins.go2rtc.server_url(),
+                    'ignore_ssl_validation': self.settingsViewModel.settings.plugins.go2rtc.ignore_ssl_validation(),
                 }).done(function (response) {
                     if (response.success) {
                         self.streams.set(webcam_name, src);
@@ -210,7 +214,8 @@ $(function () {
             self.remove_stream = function (data) {
                 OctoPrint.simpleApiCommand("go2rtc", "remove_stream", {
                     "name": data.key(),
-                    "server_url": self.settingsViewModel.settings.plugins.go2rtc.server_url()
+                    "server_url": self.settingsViewModel.settings.plugins.go2rtc.server_url(),
+                    'ignore_ssl_validation': self.settingsViewModel.settings.plugins.go2rtc.ignore_ssl_validation(),
                 }).done(function (response) {
                     if (response.success) {
                         self.streams.remove(data);
