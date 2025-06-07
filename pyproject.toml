@@ -1,0 +1,38 @@
+[build-system]
+requires = [
+    "setuptools>=67",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "OctoPrint_go2rtc"
+version = "0.0.7"
+description = "Plugin to control and configure go2rtc from within OctoPrint."
+authors = [
+    { name = "jneilliii", email = "jneilliii+github@gmail.com" },
+]
+license = "AGPL-3.0-or-later"
+requires-python = ">=3,<4"
+dependencies = []
+
+[project.entry-points."octoprint.plugin"]
+go2rtc = "octoprint_go2rtc"
+
+[project.urls]
+Homepage = "https://github.com/jneilliii/OctoPrint-go2rtc"
+
+[project.optional-dependencies]
+develop = [
+    "go-task-bin",
+]
+
+[project.readme]
+file = "README.md"
+content-type = "markdown"
+
+[tool.setuptools]
+include-package-data = true
+packages = [
+    "octoprint_go2rtc",
+]
