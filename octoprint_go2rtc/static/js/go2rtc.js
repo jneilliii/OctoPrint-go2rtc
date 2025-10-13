@@ -18,6 +18,43 @@ $(function () {
             self.verifying_url = ko.observable(false);
             self.server_url = "";
 
+            // Helper function to get or create stream profile
+            self.get_stream_profile = function(stream_key) {
+                try {
+                    if (!self.settingsViewModel.settings.plugins.go2rtc.stream_profiles) {
+                        self.settingsViewModel.settings.plugins.go2rtc.stream_profiles = {};
+                    }
+                    if (!self.settingsViewModel.settings.plugins.go2rtc.stream_profiles[stream_key]) {
+                        self.settingsViewModel.settings.plugins.go2rtc.stream_profiles[stream_key] = {
+                            flip_h: ko.observable(false),
+                            flip_v: ko.observable(false),
+                            rotate90: ko.observable(false)
+                        };
+                    } else {
+                        // Ensure observables exist
+                        const profile = self.settingsViewModel.settings.plugins.go2rtc.stream_profiles[stream_key];
+                        if (typeof profile.flip_h !== 'function') {
+                            profile.flip_h = ko.observable(profile.flip_h || false);
+                        }
+                        if (typeof profile.flip_v !== 'function') {
+                            profile.flip_v = ko.observable(profile.flip_v || false);
+                        }
+                        if (typeof profile.rotate90 !== 'function') {
+                            profile.rotate90 = ko.observable(profile.rotate90 || false);
+                        }
+                    }
+                    return self.settingsViewModel.settings.plugins.go2rtc.stream_profiles[stream_key];
+                } catch (e) {
+                    console.error('Error in get_stream_profile:', e);
+                    // Return safe defaults if there's an error
+                    return {
+                        flip_h: ko.observable(false),
+                        flip_v: ko.observable(false),
+                        rotate90: ko.observable(false)
+                    };
+                }
+            };
+
             self.validate_url = function () {
                 if (self.settingsViewModel.settings.plugins.go2rtc.server_url() === "") {
                     self.is_valid_url(false);
@@ -58,8 +95,43 @@ $(function () {
             };
 
             self.onBeforeBinding = function () {
-                self.streams = ko.observableDictionary(ko.toJS(self.settingsViewModel.settings.plugins.go2rtc.streams));
-                self.is_valid_url(self.settingsViewModel.settings.plugins.go2rtc.is_valid_url());
+                try {
+                    self.streams = ko.observableDictionary(ko.toJS(self.settingsViewModel.settings.plugins.go2rtc.streams));
+                    self.is_valid_url(self.settingsViewModel.settings.plugins.go2rtc.is_valid_url());
+
+                    // Initialize stream_profiles if it doesn't exist or is invalid
+                    if (!self.settingsViewModel.settings.plugins.go2rtc.stream_profiles ||
+                        typeof self.settingsViewModel.settings.plugins.go2rtc.stream_profiles !== 'object') {
+                        self.settingsViewModel.settings.plugins.go2rtc.stream_profiles = {};
+                    }
+
+                    // Convert existing stream profiles to observables
+                    const profiles = self.settingsViewModel.settings.plugins.go2rtc.stream_profiles;
+
+                    for (const key in profiles) {
+                        if (profiles.hasOwnProperty(key)) {
+                            const profile = profiles[key];
+                            if (!profile || typeof profile !== 'object') continue;
+
+                            // Ensure all values are observables
+                            if (typeof profile.flip_h !== 'function') {
+                                profile.flip_h = ko.observable(profile.flip_h || false);
+                            }
+                            if (typeof profile.flip_v !== 'function') {
+                                profile.flip_v = ko.observable(profile.flip_v || false);
+                            }
+                            if (typeof profile.rotate90 !== 'function') {
+                                profile.rotate90 = ko.observable(profile.rotate90 || false);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('go2rtc: Fatal error in onBeforeBinding', e);
+                    // Initialize with safe defaults
+                    self.streams = ko.observableDictionary({});
+                    self.is_valid_url(false);
+                    self.settingsViewModel.settings.plugins.go2rtc.stream_profiles = {};
+                }
             };
 
             self.onAfterBinding = function () {
@@ -76,6 +148,13 @@ $(function () {
                                 video.src = self.get_stream_src(stream_key);
                                 video.background = false;
                                 video.visibilityThreshold = 1;
+
+                                // Get transform settings from profile
+                                const profile = self.get_stream_profile(stream_key);
+                                video.setAttribute('data-flip-h', ko.unwrap(profile.flip_h) || false);
+                                video.setAttribute('data-flip-v', ko.unwrap(profile.flip_v) || false);
+                                video.setAttribute('data-rotate90', ko.unwrap(profile.rotate90) || false);
+
                                 document.getElementById('go2rtc_' + stream_key).appendChild(video);
                             } else {
                                 self.disabled_streams.set(stream_key, item.value());
@@ -120,9 +199,78 @@ $(function () {
                 }
                 self.settingsViewModel.settings.plugins.go2rtc.disabled_streams = self.disabled_streams.keys();
                 self.settingsViewModel.settings.plugins.go2rtc.is_valid_url(self.is_valid_url());
+
+                // Ensure stream_profiles exists before processing
+                if (!self.settingsViewModel.settings.plugins.go2rtc.stream_profiles) {
+                    self.settingsViewModel.settings.plugins.go2rtc.stream_profiles = {};
+                }
+
+                // Check if transform settings have changed and convert observables to plain values
+                let transformsChanged = false;
+                const profiles = self.settingsViewModel.settings.plugins.go2rtc.stream_profiles;
+                const plainProfiles = {};
+
+                for (const key in profiles) {
+                    if (profiles.hasOwnProperty(key)) {
+                        const profile = profiles[key];
+                        const flip_h = ko.unwrap(profile.flip_h) || false;
+                        const flip_v = ko.unwrap(profile.flip_v) || false;
+                        const rotate90 = ko.unwrap(profile.rotate90) || false;
+
+                        // Check if any transform setting is enabled
+                        if (flip_h || flip_v || rotate90) {
+                            transformsChanged = true;
+                        }
+
+                        // Store plain values
+                        plainProfiles[key] = {
+                            flip_h: flip_h,
+                            flip_v: flip_v,
+                            rotate90: rotate90
+                        };
+                    }
+                }
+
+                // Store if transforms changed for later notification
+                self.transformsChanged = transformsChanged;
+
+                // Replace the profiles object with plain values for saving
+                self.settingsViewModel.settings.plugins.go2rtc.stream_profiles = plainProfiles;
             };
 
             self.onSettingsHidden = function (payload) {
+                // Check if transform settings changed and show notification
+                if (self.transformsChanged) {
+                    new PNotify({
+                        title: 'Refresh required',
+                        text: "Stream transform settings have been updated. Please refresh the page to see the changes.",
+                        type: 'info',
+                        hide: false,
+                        buttons: {
+                            closer: false,
+                            sticker: false
+                        },
+                        confirm: {
+                            confirm: true,
+                            buttons: [{
+                                text: 'Refresh now',
+                                addClass: 'btn-primary',
+                                click: function (notice) {
+                                    location.reload();
+                                    notice.remove();
+                                }
+                            }, {
+                                text: 'Later',
+                                addClass: 'btn-secondary',
+                                click: function (notice) {
+                                    notice.remove();
+                                }
+                            }]
+                        }
+                    });
+                    self.transformsChanged = false;
+                }
+
                 if (self.streams_updated()) {
                     const buttons = [];
                     if (self.settingsViewModel.settings.server.commands.serverRestartCommand() !== null && self.settingsViewModel.settings.server.commands.serverRestartCommand() !== "") {

@@ -40,6 +40,17 @@
                         <button class="btn btn-danger" data-bind="click: $root.remove_stream" title="{{ _('Remove stream from go2rtc configuration.') }}"><i class="icon icon-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
+                <div class="controls" style="margin-left: 180px;">
+                    <label class="checkbox inline" style="margin-right: 15px;">
+                        <input type="checkbox" data-bind="checked: $root.get_stream_profile(key()).flip_h"> {{ _('Flip Horizontal') }}
+                    </label>
+                    <label class="checkbox inline" style="margin-right: 15px;">
+                        <input type="checkbox" data-bind="checked: $root.get_stream_profile(key()).flip_v"> {{ _('Flip Vertical') }}
+                    </label>
+                    <label class="checkbox inline">
+                        <input type="checkbox" data-bind="checked: $root.get_stream_profile(key()).rotate90"> {{ _('Rotate 90° CCW') }}
+                    </label>
+                </div>
             </div>
         </div>
         <h4 data-bind="visible: disabled_streams.items().length > 0" style="display: none">{{ _('Disabled Streams') }}</h4>

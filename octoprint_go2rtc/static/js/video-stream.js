@@ -19,13 +19,23 @@ class VideoStream extends VideoRTC {
      * Custom GUI
      */
     oninit() {
-        console.debug('stream.oninit');
         super.oninit();
 
         this.innerHTML = `
         <style>
         video-stream {
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+        }
+        video-stream.rotated video {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
         }
         .go2rtc.info {
             position: absolute;
@@ -47,6 +57,37 @@ class VideoStream extends VideoRTC {
 
         const info = this.querySelector('.go2rtc.info');
         this.insertBefore(this.video, info);
+        this.applyTransformsStatic();
+    }
+
+    /**
+     * Apply rotation and mirroring transforms statically before video starts
+     */
+    applyTransformsStatic() {
+        if (!this.video) return;
+
+        const flipH = this.getAttribute('data-flip-h') === 'true';
+        const flipV = this.getAttribute('data-flip-v') === 'true';
+        const rotate90 = this.getAttribute('data-rotate90') === 'true';
+
+        // Add/remove rotated class for container styling
+        if (rotate90) {
+            this.classList.add('rotated');
+        } else {
+            this.classList.remove('rotated');
+        }
+
+        // Set transform origin
+        this.video.style.transformOrigin = 'center center';
+
+        // Build transform list
+        let transforms = [];
+        if (flipH) transforms.push('scaleX(-1)');
+        if (flipV) transforms.push('scaleY(-1)');
+        if (rotate90) transforms.push('rotate(-90deg)');
+
+        // Apply transforms
+        this.video.style.transform = transforms.length > 0 ? transforms.join(' ') : '';
     }
 
     onconnect() {
