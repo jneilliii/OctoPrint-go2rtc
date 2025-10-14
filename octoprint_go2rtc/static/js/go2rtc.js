@@ -17,6 +17,7 @@ $(function () {
             self.is_valid_url = ko.observable(false);
             self.verifying_url = ko.observable(false);
             self.server_url = "";
+            self.originalProfileValues = {};
 
             // Helper function to get or create stream profile
             self.get_stream_profile = function(stream_key) {
@@ -191,6 +192,20 @@ $(function () {
                 if (self.settingsViewModel.settings.plugins.go2rtc.server_url() !== "" && self.is_valid_url()) {
                     self.get_webcams();
                 }
+
+                // Store original profile values to detect changes later
+                const profiles = self.settingsViewModel.settings.plugins.go2rtc.stream_profiles;
+                self.originalProfileValues = {};
+                for (const key in profiles) {
+                    if (profiles.hasOwnProperty(key)) {
+                        const profile = profiles[key];
+                        self.originalProfileValues[key] = {
+                            flip_h: ko.unwrap(profile.flip_h) || false,
+                            flip_v: ko.unwrap(profile.flip_v) || false,
+                            rotate90: ko.unwrap(profile.rotate90) || false
+                        };
+                    }
+                }
             };
 
             self.onSettingsBeforeSave = function () {
@@ -217,9 +232,14 @@ $(function () {
                         const flip_v = ko.unwrap(profile.flip_v) || false;
                         const rotate90 = ko.unwrap(profile.rotate90) || false;
 
-                        // Check if any transform setting is enabled
-                        if (flip_h || flip_v || rotate90) {
-                            transformsChanged = true;
+                        // Check if values changed compared to original
+                        const original = self.originalProfileValues[key];
+                        if (original) {
+                            if (flip_h !== original.flip_h ||
+                                flip_v !== original.flip_v ||
+                                rotate90 !== original.rotate90) {
+                                transformsChanged = true;
+                            }
                         }
 
                         // Store plain values
