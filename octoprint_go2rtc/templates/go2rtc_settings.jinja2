@@ -28,27 +28,27 @@
     </div>
     <div class="row-fluid" data-bind="visible: is_valid_url() && !settingsViewModel.settings.plugins.go2rtc.api_error()" style="display: none;">
         <h4>{{ _('Enabled Streams') }}</h4>
-        <div class="well" data-bind='foreach: streams.items'>
+        <div class="well" data-bind="foreach: stream_profiles.items">
             <div class="control-group">
                 <label class="control-label"><span data-bind="text: key"></span></label>
                 <div class="controls">
                     <div class="span10">
-                        <input type="text" class="input-block-level" data-bind="value: value" placeholder="{{ _('Stream Value') }}" readonly="readonly">
+                        <input type="text" class="input-block-level" data-bind="value: value().URL" placeholder="{{ _('Stream Value') }}" readonly="readonly">
                     </div>
                     <div class="span2 btn-group">
                         <button class="btn btn-primary" data-bind="click: $root.disable_stream" title="{{ _('Disable stream in this instance of OctoPrint.') }}"><i class="fas fa-video-slash" aria-hidden="true"></i></button>
-                        <button class="btn btn-danger" data-bind="click: $root.remove_stream" title="{{ _('Remove stream from go2rtc configuration.') }}"><i class="icon icon-trash" aria-hidden="true"></i></button>
+                        <button class="btn btn-danger" data-bind="click: $root.remove_stream_profile" title="{{ _('Remove stream from go2rtc configuration.') }}"><i class="icon icon-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
                 <div class="controls" style="margin-left: 180px;">
                     <label class="checkbox inline" style="margin-right: 15px;">
-                        <input type="checkbox" data-bind="checked: $root.get_stream_profile(key()).flip_h"> {{ _('Flip Horizontal') }}
+                        <input type="checkbox" data-bind="checked: value().flip_h"> {{ _('Flip Horizontal') }}
                     </label>
                     <label class="checkbox inline" style="margin-right: 15px;">
-                        <input type="checkbox" data-bind="checked: $root.get_stream_profile(key()).flip_v"> {{ _('Flip Vertical') }}
+                        <input type="checkbox" data-bind="checked: value().flip_v"> {{ _('Flip Vertical') }}
                     </label>
                     <label class="checkbox inline">
-                        <input type="checkbox" data-bind="checked: $root.get_stream_profile(key()).rotate90"> {{ _('Rotate 90° CCW') }}
+                        <input type="checkbox" data-bind="checked: value().rotate90"> {{ _('Rotate 90° CCW') }}
                     </label>
                 </div>
             </div>

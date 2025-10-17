@@ -41,12 +41,28 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
     ##~~ SettingsPlugin mixin
 
+    def get_settings_version(self):
+        return 1
+
+    def on_settings_migrate(self, target, current):
+        if current is None or current == 1:
+            plugin_settings = self.on_settings_load()
+            streams = plugin_settings.get("streams", None) or {}
+            profiles = plugin_settings.get("stream_profiles", None) or {}
+            for stream_key in streams:
+                if not profiles.get(stream_key):
+                    profiles[stream_key] = self._default_profile
+                    profiles[stream_key]["name"] = stream_key
+                    profiles[stream_key]["URL"] = streams[stream_key]
+            self._settings.set(["stream_profiles"], profiles)
+            self._logger.info(f"streams: {streams}, profiles: {profiles}")
+
     def get_settings_defaults(self):
         return {
             "api_error": False,
             "is_valid_url": False,
             "server_url": "",
-            "stream_profiles": {},
+            "stream_profiles": {},  # TODO: refactor dictionary to array, adjust
             "disabled_streams": [],
             "ignore_ssl_validation": False
         }
@@ -55,6 +71,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         if yaml_settings.get("streams"):
             sanitized_streams = {str(key): value for key, value in yaml_settings.get("streams").items()}
             yaml_settings["streams"] = sanitized_streams
+        else:
+            yaml_settings["streams"] = {}
         return yaml_settings
 
     def on_settings_load(self):
@@ -80,6 +98,14 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             except Timeout:
                 self._logger.error(f"timeout error with {config_url}")
                 self._plugin_settings["is_valid_url"] = False
+
+            streams = self._plugin_settings.get("streams", None) or {}
+            for stream_key in streams:
+                if stream_key not in self._plugin_settings.get("stream_profiles", {}):
+                    profile = self._default_profile
+                    profile["name"] = stream_key
+                    profile["URL"] = streams[stream_key]
+                    self._plugin_settings["stream_profiles"][stream_key] = profile
 
         self._logger.info(f"on_settings_load: {self._plugin_settings}")
         return self._plugin_settings
@@ -134,7 +160,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
                 if web_response.status_code == 200:
                     yaml_settings = yaml.load_from_file(web_response.content)
-                    streams = yaml_settings.get("streams", {})
+                    streams = yaml_settings.get("streams", None) or {}
             except ConnectionError:
                 self._logger.error(f"connection error with {config_url}")
                 streams = {}
@@ -181,7 +207,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             self._logger.debug(f"Webcam: {webcam}")
             return webcam
 
-        return [profile_to_webcam(stream_key) for stream_key in streams if str(stream_key) not in self._settings.get(["disabled_streams"])]
+        return [profile_to_webcam(stream_key) for stream_key in streams if
+                str(stream_key) not in self._settings.get(["disabled_streams"])]
 
     def lookup_webcam(self, webcam_name):
         webcam_configs = self.get_webcam_configurations()
@@ -236,7 +263,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             try:
                 # pull a list of available ffmpeg devices detected by go2rtc
                 if request.args.get("get_cams"):
-                    available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=(3, 10), verify=validate_ssl)
+                    available_cameras = requests.get(f"{server_url}/api/ffmpeg/devices", timeout=(3, 10),
+                                                     verify=validate_ssl)
                     if available_cameras.status_code == 200:
                         response = available_cameras.json()
                     else:
@@ -249,7 +277,14 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                     if web_response.status_code == 200:
                         yaml_settings = yaml.load_from_file(web_response.content)
                         if yaml_settings.get("api", {}).get("origin") == "*":
-                            response = {"success": True, "api": True, "streams": yaml_settings.get("streams", {})}
+                            streams = yaml_settings.get("streams", {})
+                            stream_profiles = {}
+                            for stream_key in streams:
+                                profile = self._default_profile
+                                profile["name"] = stream_key
+                                profile["URL"] = streams[stream_key]
+                                stream_profiles[stream_key] = profile
+                            response = {"success": True, "api": True, "stream_profiles": stream_profiles}
                         else:
                             response = {"success": True, "api": False}
             except ConnectionError:
@@ -280,7 +315,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                 if stream_add.status_code == 200:
                     response = flask.jsonify({'success': True, 'src': webcam_src, 'name': webcam_name})
             elif command == "remove_stream":
-                stream_delete = requests.delete(f"{server_url}/api/streams", params={'src': webcam_name}, timeout=(3, 10),
+                stream_delete = requests.delete(f"{server_url}/api/streams", params={'src': webcam_name},
+                                                timeout=(3, 10),
                                                 verify=validate_ssl)
                 if stream_delete.status_code == 200:
                     response = flask.jsonify({'success': True, 'name': webcam_name})
