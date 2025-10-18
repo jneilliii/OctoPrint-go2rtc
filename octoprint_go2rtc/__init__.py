@@ -8,7 +8,7 @@ import requests
 from octoprint.settings import valid_boolean_trues
 from requests.exceptions import Timeout, ConnectionError
 from octoprint.schema.webcam import Webcam, WebcamCompatibility, RatioEnum
-from octoprint.util import yaml
+from octoprint.util import yaml, dict_merge
 from octoprint.webcams import WebcamNotAbleToTakeSnapshotException
 from octoprint.access.permissions import Permissions, ADMIN_GROUP
 from flask_babel import gettext
@@ -45,25 +45,34 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
         return 1
 
     def on_settings_migrate(self, target, current):
-        if current is None or current == 1:
+        if current is None or current < 1:
             plugin_settings = self.on_settings_load()
             streams = plugin_settings.get("streams", None) or {}
             profiles = plugin_settings.get("stream_profiles", None) or {}
+            original_disabled_streams = plugin_settings.get("disabled_streams", None) or []
+            disabled_streams = {}
             for stream_key in streams:
-                if not profiles.get(stream_key):
+                if not profiles.get(stream_key) and stream_key not in original_disabled_streams:
                     profiles[stream_key] = self._default_profile
                     profiles[stream_key]["name"] = stream_key
                     profiles[stream_key]["URL"] = streams[stream_key]
+                if stream_key in original_disabled_streams:
+                    disabled_streams[stream_key] = self._default_profile
+                    disabled_streams[stream_key]["name"] = stream_key
+                    disabled_streams[stream_key]["URL"] = streams[stream_key]
+                    del profiles[stream_key]
+
             self._settings.set(["stream_profiles"], profiles)
-            self._logger.info(f"streams: {streams}, profiles: {profiles}")
+            self._settings.set(["disabled_streams"], disabled_streams)
+            self._logger.info(f"streams: {streams}, profiles: {profiles}, disabled_streams: {disabled_streams}")
 
     def get_settings_defaults(self):
         return {
             "api_error": False,
             "is_valid_url": False,
             "server_url": "",
-            "stream_profiles": {},  # TODO: refactor dictionary to array, adjust
-            "disabled_streams": [],
+            "stream_profiles": {},
+            "disabled_streams": {},
             "ignore_ssl_validation": False
         }
 
@@ -118,6 +127,26 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             if data.get("server_url", "").endswith("/"):
                 data["server_url"] = data["server_url"][:-1]
 
+        original_stream_profiles = self._settings.get(["stream_profiles"]) or {}
+        original_disabled_streams = self._settings.get(["disabled_streams"]) or {}
+
+        for stream_key in data.get("remove_disabled_streams", {}):
+            if stream_key in original_disabled_streams:
+                del original_disabled_streams[stream_key]
+
+        for stream_key in data.get("remove_stream_profiles", {}):
+            if stream_key in original_stream_profiles:
+                del original_stream_profiles[stream_key]
+
+        del data["remove_stream_profiles"]
+        del data["remove_disabled_streams"]
+
+        self._settings.set(["stream_profiles"], None)
+        self._settings.set(["disabled_streams"], None)
+
+        data["stream_profiles"] = dict_merge(original_stream_profiles, data["stream_profiles"])
+        data["disabled_streams"] = dict_merge(original_disabled_streams, data["disabled_streams"])
+
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
 
     ##~~ AssetPlugin mixin
@@ -150,7 +179,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
 
     def get_webcam_configurations(self):
         streams = {}
-        profiles = self._settings.get(['stream_profiles'])
+        profiles = self._settings.get(['stream_profiles']) or {}
         go2rtc_server_url = self._settings.get(['server_url'])
         validate_ssl = self._settings.get(["ignore_ssl_validation"]) not in valid_boolean_trues
         if go2rtc_server_url != "":
@@ -319,6 +348,10 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                                                 timeout=(3, 10),
                                                 verify=validate_ssl)
                 if stream_delete.status_code == 200:
+                    stream_profiles = self._settings.get(["stream_profiles"]) or {}
+                    if webcam_name in stream_profiles:
+                        del stream_profiles[webcam_name]
+                        self._settings.set(["stream_profiles"], stream_profiles)
                     response = flask.jsonify({'success': True, 'name': webcam_name})
             elif command == "enable_cors":
                 config_patch = requests.patch(f"{server_url}/api/config", data=yaml.dump({'api': {'origin': '*'}}),
@@ -331,6 +364,9 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             response = flask.make_response("Invalid server url", 502)
 
         return response
+
+    def is_api_protected(self):
+        return True
 
     def is_template_autoescaped(self):
         return True
