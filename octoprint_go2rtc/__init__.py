@@ -60,7 +60,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                     disabled_streams[stream_key] = self._default_profile.copy()
                     disabled_streams[stream_key]["name"] = stream_key
                     disabled_streams[stream_key]["URL"] = streams[stream_key]
-                    del profiles[stream_key]
+                    profiles.pop(stream_key, None)
 
             self._settings.set(["stream_profiles"], profiles)
             self._settings.set(["disabled_streams"], disabled_streams)
