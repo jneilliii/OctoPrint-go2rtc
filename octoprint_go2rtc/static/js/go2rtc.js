@@ -112,9 +112,9 @@ $(function () {
 
                                 // Get transform settings from profile
                                 const profile = self.stream_profiles.get(stream_key);
-                                video.setAttribute('data-flip-h', profile().flip_h);
-                                video.setAttribute('data-flip-v', profile().flip_v);
-                                video.setAttribute('data-rotate90', profile().rotate90);
+                                video.setAttribute('data-flip-h', String(!!profile().flip_h));
+                                video.setAttribute('data-flip-v', String(!!profile().flip_v));
+                                video.setAttribute('data-rotate90', String(!!profile().rotate90));
 
                                 $('#go2rtc_' + stream_key).append(video);
 
