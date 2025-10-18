@@ -303,7 +303,7 @@ $(function () {
 
             self.enable_stream = function (data) {
                 self.disabled_streams.remove(data);
-                self.stream_profiles.push(data);
+                self.stream_profiles.set(data.key(), data.value());
             };
 
             self.remove_stream_profile = function (data) {
