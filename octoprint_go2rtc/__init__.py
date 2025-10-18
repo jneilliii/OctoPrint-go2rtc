@@ -53,11 +53,11 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             disabled_streams = {}
             for stream_key in streams:
                 if not profiles.get(stream_key) and stream_key not in original_disabled_streams:
-                    profiles[stream_key] = self._default_profile
+                    profiles[stream_key] = self._default_profile.copy()
                     profiles[stream_key]["name"] = stream_key
                     profiles[stream_key]["URL"] = streams[stream_key]
                 if stream_key in original_disabled_streams:
-                    disabled_streams[stream_key] = self._default_profile
+                    disabled_streams[stream_key] = self._default_profile.copy()
                     disabled_streams[stream_key]["name"] = stream_key
                     disabled_streams[stream_key]["URL"] = streams[stream_key]
                     del profiles[stream_key]
@@ -198,7 +198,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                 streams = {}
 
         def profile_to_webcam(stream_key):
-            profile = profiles.get(stream_key, None) or self._default_profile
+            profile = profiles.get(stream_key, None) or self._default_profile.copy()
             flip_h = profile.get("flip_h", None) or False
             flip_v = profile.get("flip_v", None) or False
             rotate90 = profile.get("rotate90", None) or False
