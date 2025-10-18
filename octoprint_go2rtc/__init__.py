@@ -309,7 +309,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
                             streams = yaml_settings.get("streams", {})
                             stream_profiles = {}
                             for stream_key in streams:
-                                profile = self._default_profile
+                                profile = self._default_profile.copy()
                                 profile["name"] = stream_key
                                 profile["URL"] = streams[stream_key]
                                 stream_profiles[stream_key] = profile
