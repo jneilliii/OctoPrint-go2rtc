@@ -138,8 +138,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             if stream_key in original_stream_profiles:
                 del original_stream_profiles[stream_key]
 
-        del data["remove_stream_profiles"]
-        del data["remove_disabled_streams"]
+        data.pop("remove_stream_profiles", None)
+        data.pop("remove_disabled_streams", None)
 
         self._settings.set(["stream_profiles"], None)
         self._settings.set(["disabled_streams"], None)
