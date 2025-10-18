@@ -111,7 +111,7 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             streams = self._plugin_settings.get("streams", None) or {}
             for stream_key in streams:
                 if stream_key not in self._plugin_settings.get("stream_profiles", {}):
-                    profile = self._default_profile
+                    profile = self._default_profile.copy()
                     profile["name"] = stream_key
                     profile["URL"] = streams[stream_key]
                     self._plugin_settings["stream_profiles"][stream_key] = profile
