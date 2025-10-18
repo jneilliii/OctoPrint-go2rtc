@@ -83,7 +83,7 @@
                 </div>
             </div>
             <div class="row-fluid" data-bind="foreach: ffmpeg_sources">
-                <div class="control-group" data-bind="if: url.indexOf(' ') == -1">
+                <div class="control-group" data-bind="if: (url || '').indexOf(' ') == -1">
                     <label class="control-label" style="padding-top: 0"><input type="text" class="input-block-level" placeholder="{{ _('Stream ID') }}" data-bind="value: name"></label>
                     <div class="controls">
                         <div class="span10">
