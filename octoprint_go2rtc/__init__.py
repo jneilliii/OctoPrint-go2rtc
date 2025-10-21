@@ -202,8 +202,8 @@ class go2rtcPlugin(octoprint.plugin.SettingsPlugin,
             flip_h = profile.get("flip_h", None) or False
             flip_v = profile.get("flip_v", None) or False
             rotate90 = profile.get("rotate90", None) or False
-            snapshot = profile.get("snapshot", None) or f"{go2rtc_server_url}/api/frame.jpeg?src={stream_key}"
-            stream = profile.get("URL", None) or f"{go2rtc_server_url}/api/ws?src={stream_key}"
+            snapshot = f"{go2rtc_server_url}/api/frame.jpeg?src={stream_key}"
+            stream = f"{go2rtc_server_url}/api/ws?src={stream_key}"
             stream_ratio = profile.get("stream_ratio", None) or "4:3"
             can_snapshot = snapshot != "" and snapshot is not None
             name = str(stream_key)
